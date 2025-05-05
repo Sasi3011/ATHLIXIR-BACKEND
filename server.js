@@ -33,13 +33,20 @@ app.use(cors({
     console.log('Request origin:', origin);
     
     // Allow all localhost and 127.0.0.1 origins
-    if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
+    const allowedOrigins = [
+      FRONTEND_URL,
+      'http://localhost:3000',
+      'http://localhost:5173',
+      'http://127.0.0.1:5173'
+    ];
+    
+    if (allowedOrigins.includes(origin)) {
       console.log('Origin allowed:', origin);
       callback(null, true);
     } else {
       console.log('Origin not allowed:', origin);
       callback(new Error('Not allowed by CORS'));
-    }
+    }    
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true,
