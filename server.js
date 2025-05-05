@@ -30,26 +30,28 @@ mongoose.connect(MONGO_URI, {})
 app.use(cors({
   origin: function(origin, callback) {
     if (!origin) return callback(null, true);
-    const allowedOrigins = [
-      FRONTEND_URL || 'http://localhost:3000',
-      'http://localhost:5173',
-      'http://localhost:5174',
-      'http://localhost:5175',
-      'http://127.0.0.1:5173',
-      'http://127.0.0.1:5174',
-      'http://127.0.0.1:5175'
-    ];
-    if (allowedOrigins.includes(origin)) {
+    console.log('Request origin:', origin);
+    
+    // Allow all localhost and 127.0.0.1 origins
+    if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
       console.log('Origin allowed:', origin);
-      return callback(null, true);
+      callback(null, true);
+    } else {
+      console.log('Origin not allowed:', origin);
+      callback(new Error('Not allowed by CORS'));
     }
-    return callback(new Error('Not allowed by CORS'));
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range']
 }));
 app.use(express.json());
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  crossOriginOpenerPolicy: { policy: 'same-origin' },
+  crossOriginEmbedderPolicy: false
+}));
 app.use(rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100,
