@@ -27,25 +27,29 @@ mongoose.connect(MONGO_URI, {})
   });
 
 // Middleware
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  process.env.FRONTEND_URL
+];
+
 app.use(cors({
   origin: function(origin, callback) {
-    if (!origin) return callback(null, true);
     console.log('Request origin:', origin);
-    
-    // Allow all localhost and 127.0.0.1 origins
-    if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
+    if (!origin || allowedOrigins.includes(origin)) {
       console.log('Origin allowed:', origin);
-      callback(null, true);
-    } else {
-      console.log('Origin not allowed:', origin);
-      callback(new Error('Not allowed by CORS'));
+      return callback(null, true);
     }
+    console.log('Origin not allowed:', origin);
+    return callback(new Error('Not allowed by CORS'));
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true,
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   exposedHeaders: ['Content-Range', 'X-Content-Range']
 }));
+
 app.use(express.json());
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
