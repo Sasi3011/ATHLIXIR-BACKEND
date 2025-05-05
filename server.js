@@ -5,6 +5,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const cors = require('cors');
 const authRoutes = require('./routes/auth');
+const athleteRoutes = require('./routes/athlete');
 const socket = require('./socket');
 
 const app = express();
@@ -18,9 +19,7 @@ if (!MONGO_URI || !JWT_SECRET || !FRONTEND_URL) {
 }
 
 // MongoDB connection
-mongoose.connect(MONGO_URI, {
-
-})
+mongoose.connect(MONGO_URI, {})
   .then(() => console.log('MongoDB connected'))
   .catch((err) => {
     console.error('MongoDB connection error:', err);
@@ -30,9 +29,7 @@ mongoose.connect(MONGO_URI, {
 // Middleware
 app.use(cors({
   origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps, curl requests)
     if (!origin) return callback(null, true);
-    
     const allowedOrigins = [
       FRONTEND_URL || 'http://localhost:3000',
       'http://localhost:5173',
@@ -42,13 +39,11 @@ app.use(cors({
       'http://127.0.0.1:5174',
       'http://127.0.0.1:5175'
     ];
-    
-    // Check if the origin is allowed
-    if (allowedOrigins.indexOf(origin) === -1) {
+    if (allowedOrigins.includes(origin)) {
       console.log('Origin allowed:', origin);
       return callback(null, true);
     }
-    return callback(null, true);
+    return callback(new Error('Not allowed by CORS'));
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true,
@@ -60,8 +55,17 @@ app.use(rateLimit({
   max: 100,
 }));
 
+// Request logging
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.url}`);
+  next();
+});
+
 // Routes
+console.log('Mounting routes...');
 app.use('/api/auth', authRoutes);
+app.use('/api/athlete', athleteRoutes);
+console.log('Routes mounted: /api/auth, /api/athlete');
 
 // Error handling middleware
 app.use((err, req, res, next) => {
