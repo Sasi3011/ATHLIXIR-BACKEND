@@ -90,9 +90,29 @@ router.post('/login', loginValidation, async (req, res, next) => {
       return res.status(400).json({ error: 'Invalid credentials' });
     }
 
-    // Generate JWT
+    // Double-check athlete profile status for athletes
+    let profileCompleted = user.profileCompleted;
+    
+    if (userType === 'athlete') {
+      // Explicitly check if athlete profile exists
+      const athleteProfile = await Athlete.findOne({ email });
+      
+      // Update profile completion status if needed
+      if (!!athleteProfile && !user.profileCompleted) {
+        console.log('Fixing profile completion status for user:', user._id);
+        await User.findByIdAndUpdate(user._id, { profileCompleted: true });
+        profileCompleted = true;
+      }
+    }
+
+    // Generate JWT with updated profile status
     const token = jwt.sign(
-      { id: user._id, email: user.email, userType: user.userType },
+      { 
+        id: user._id, 
+        email: user.email, 
+        userType: user.userType,
+        profileCompleted: profileCompleted
+      },
       process.env.JWT_SECRET,
       { expiresIn: '1h' }
     );
@@ -103,7 +123,7 @@ router.post('/login', loginValidation, async (req, res, next) => {
         id: user._id,
         email: user.email,
         userType: user.userType,
-        profileCompleted: user.profileCompleted,
+        profileCompleted: profileCompleted, // Use the verified value
       },
     });
   } catch (err) {
@@ -113,27 +133,39 @@ router.post('/login', loginValidation, async (req, res, next) => {
 });
 
 // Check profile completion
-router.get('/profile-completion/:email', async (req, res, next) => {
+router.get('/debug-profile/:email', async (req, res, next) => {
   try {
-    console.log('Checking profile completion for:', req.params.email);
     const { email } = req.params;
-
-    // Check if user exists
+    console.log('DEBUG: Checking profile status for:', email);
+    
+    // Find the user
     const user = await User.findOne({ email });
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ 
+        error: 'User not found', 
+        email: email 
+      });
     }
 
-    // If user is an athlete, check for athlete profile
-    if (user.userType === 'athlete') {
-      const athlete = await Athlete.findOne({ email });
-      return res.json(!!athlete); // Returns true if profile exists, false otherwise
-    }
-
-    // For non-athletes, assume profile is complete
-    res.json(true);
+    // Check if athlete profile exists
+    const athleteProfile = await Athlete.findOne({ email });
+    
+    // Return full status information for debugging
+    res.json({
+      userDetails: {
+        id: user._id,
+        email: user.email,
+        userType: user.userType,
+        profileCompletedFlag: user.profileCompleted
+      },
+      profileExists: !!athleteProfile,
+      athleteProfileId: athleteProfile ? athleteProfile._id : null,
+      athleteUserId: athleteProfile ? athleteProfile.userId : null,
+      userIdMatch: athleteProfile ? 
+        user._id.toString() === athleteProfile.userId.toString() : false
+    });
   } catch (err) {
-    console.error('Profile completion check error:', err.message);
+    console.error('Debug profile check error:', err.message);
     next(err);
   }
 });

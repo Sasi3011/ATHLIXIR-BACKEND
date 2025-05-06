@@ -26,7 +26,7 @@ mongoose.connect(MONGO_URI, {})
     process.exit(1);
   });
 
-// Middleware
+// Define allowed origins
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
@@ -35,42 +35,21 @@ const allowedOrigins = [
   'http://localhost:8083',
   'https://athlixir.technovanam.com',
   'https://athlixir-backend.onrender.com',
-  FRONTEND_URL, // Ensure this is correct in your .env
+  FRONTEND_URL, // From .env
 ];
 
-// Pre-flight OPTIONS request handler
-app.options('*', (req, res) => {
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin) || !origin) {
-    res.header('Access-Control-Allow-Origin', origin || '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Origin, Accept');
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.status(200).send();
-  } else {
-    res.status(403).send('Not allowed by CORS');
-  }
-});
-
-// CORS middleware
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin) || !origin) {
-    res.header('Access-Control-Allow-Origin', origin || '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Origin, Accept');
-    res.header('Access-Control-Allow-Credentials', 'true');
-  }
-  next();
-});
-
-// Also keep the standard cors middleware as a fallback
+// CORS middleware - Use one approach, not multiple
 app.use(cors({
   origin: function(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      return callback(null, true);
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.log('Origin not allowed by CORS:', origin);
+      callback(new Error('Not allowed by CORS'));
     }
-    return callback(new Error('Not allowed by CORS'));
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true,
@@ -78,22 +57,27 @@ app.use(cors({
   exposedHeaders: ['Content-Range', 'X-Content-Range'],
 }));
 
-app.use(express.json());
+// Request logging
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.url} - Origin: ${req.headers.origin || 'No origin'}`);
+  next();
+});
+
+// Express middleware for parsing JSON
+app.use(express.json({ limit: '10mb' }));
+
+// Security middleware
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
   crossOriginOpenerPolicy: { policy: 'same-origin' },
   crossOriginEmbedderPolicy: false
 }));
+
+// Rate limiting
 app.use(rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100,
 }));
-
-// Request logging
-app.use((req, res, next) => {
-  console.log(`${req.method} ${req.url}`);
-  next();
-});
 
 // Routes
 console.log('Mounting routes...');
@@ -113,7 +97,14 @@ console.log('Routes mounted: /api/auth, /auth, /api/athlete, /athlete');
 
 // Error handling middleware
 app.use((err, req, res, next) => {
+  console.error('Error:', err.message);
   console.error(err.stack);
+  
+  // CORS error handling
+  if (err.message === 'Not allowed by CORS') {
+    return res.status(403).json({ error: 'CORS policy violation' });
+  }
+  
   res.status(500).json({ error: 'Something went wrong!' });
 });
 

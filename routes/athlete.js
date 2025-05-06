@@ -56,16 +56,32 @@ router.post(
         return res.status(403).json({ error: 'Unauthorized email' });
       }
 
+      console.log('Creating/updating athlete profile for user:', req.user.id);
+      
+      // Make sure userId is correctly set from the authenticated user
       const athlete = await Athlete.findOneAndUpdate(
         { email: profileData.email },
         { ...profileData, userId: req.user.id, updatedAt: new Date() },
         { upsert: true, new: true }
       );
 
-      // Update user profile completion
-      await User.findByIdAndUpdate(req.user.id, { profileCompleted: true });
+      console.log('Athlete profile saved:', athlete._id);
+      
+      // Update user profile completion status
+      const updatedUser = await User.findByIdAndUpdate(
+        req.user.id, 
+        { profileCompleted: true },
+        { new: true }  // Return the updated document
+      );
+      
+      console.log('User profile completion updated:', updatedUser.profileCompleted);
 
-      res.json({ success: true, athlete });
+      res.json({ 
+        success: true, 
+        athlete,
+        profileCompleted: true,
+        userId: req.user.id
+      });
     } catch (err) {
       console.error('Save profile error:', err.message);
       next(err);
