@@ -31,6 +31,8 @@ const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
   'http://127.0.0.1:5173',
+  'http://localhost:5177',
+  'http://localhost:8083',
   'https://athlixir.technovanam.com',
   FRONTEND_URL, // Ensure this is correct in your .env
 ];
