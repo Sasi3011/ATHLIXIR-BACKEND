@@ -34,9 +34,37 @@ const allowedOrigins = [
   'http://localhost:5177',
   'http://localhost:8083',
   'https://athlixir.technovanam.com',
+  'https://athlixir-backend.onrender.com',
   FRONTEND_URL, // Ensure this is correct in your .env
 ];
 
+// Pre-flight OPTIONS request handler
+app.options('*', (req, res) => {
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin) || !origin) {
+    res.header('Access-Control-Allow-Origin', origin || '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Origin, Accept');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.status(200).send();
+  } else {
+    res.status(403).send('Not allowed by CORS');
+  }
+});
+
+// CORS middleware
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin) || !origin) {
+    res.header('Access-Control-Allow-Origin', origin || '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Origin, Accept');
+    res.header('Access-Control-Allow-Credentials', 'true');
+  }
+  next();
+});
+
+// Also keep the standard cors middleware as a fallback
 app.use(cors({
   origin: function(origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
@@ -46,7 +74,7 @@ app.use(cors({
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Origin', 'Accept'],
   exposedHeaders: ['Content-Range', 'X-Content-Range'],
 }));
 
@@ -69,9 +97,19 @@ app.use((req, res, next) => {
 
 // Routes
 console.log('Mounting routes...');
+
+// Mount routes at both paths to ensure compatibility
 app.use('/api/auth', authRoutes);
+app.use('/auth', authRoutes);
 app.use('/api/athlete', athleteRoutes);
-console.log('Routes mounted: /api/auth, /api/athlete');
+app.use('/athlete', athleteRoutes);
+
+// Add a health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', message: 'Server is running' });
+});
+
+console.log('Routes mounted: /api/auth, /auth, /api/athlete, /athlete');
 
 // Error handling middleware
 app.use((err, req, res, next) => {
