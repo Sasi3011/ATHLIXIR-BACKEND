@@ -132,7 +132,35 @@ router.post('/login', loginValidation, async (req, res, next) => {
   }
 });
 
-// Check profile completion
+// Check profile completion status
+router.get('/profile-completion/:email', async (req, res, next) => {
+  try {
+    const { email } = req.params;
+    console.log('Checking profile completion for:', email);
+    
+    // Find the user
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // If user is not an athlete, profile is considered complete
+    if (user.userType !== 'athlete') {
+      return res.json(true);
+    }
+    
+    // For athletes, check if profile exists in the Athlete collection
+    const athleteProfile = await Athlete.findOne({ email });
+    
+    // Return true if profile exists, false otherwise
+    return res.json(!!athleteProfile);
+  } catch (err) {
+    console.error('Profile completion check error:', err.message);
+    next(err);
+  }
+});
+
+// Debug profile completion (for troubleshooting)
 router.get('/debug-profile/:email', async (req, res, next) => {
   try {
     const { email } = req.params;
