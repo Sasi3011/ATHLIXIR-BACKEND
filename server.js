@@ -18,37 +18,39 @@ if (!MONGO_URI || !JWT_SECRET || !FRONTEND_URL) {
   process.exit(1);
 }
 
-// MongoDB connection
-mongoose.connect(MONGO_URI, {})
-  .then(() => console.log('MongoDB connected'))
-  .catch((err) => {
-    console.error('MongoDB connection error:', err);
-    process.exit(1);
-  });
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log("MongoDB connected"))
+  .catch(err => console.error("MongoDB connection error:", err));
+
 
 // Define allowed origins
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
-  'http://127.0.0.1:5173',
+  'http://localhost:5174',
+  'http://localhost:5175', 
   'http://localhost:5177',
   'http://localhost:8083',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:5174',
+  'http://127.0.0.1:5175',
   'https://athlixir.technovanam.com',
   'https://athlixir-backend.onrender.com',
-  FRONTEND_URL, // From .env
+  process.env.FRONTEND_URL, // From .env
 ];
 
-// CORS middleware - Use one approach, not multiple
+// CORS middleware
 app.use(cors({
   origin: function(origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
-    if (allowedOrigins.includes(origin)) {
+    // Check against whitelist
+    if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
       console.log('Origin not allowed by CORS:', origin);
-      callback(new Error('Not allowed by CORS'));
+      callback(null, false);
     }
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -64,7 +66,7 @@ app.use((req, res, next) => {
 });
 
 // Express middleware for parsing JSON
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
 
 // Security middleware
 app.use(helmet({

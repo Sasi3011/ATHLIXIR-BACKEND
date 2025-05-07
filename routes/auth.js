@@ -10,14 +10,14 @@ const router = express.Router();
 const registerValidation = [
   body('email').isEmail().withMessage('Invalid email address'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
-  body('userType').isIn(['athlete', 'coach']).withMessage('Invalid user type'),
+  body('userType').isIn(['athlete', 'user']).withMessage('Invalid user type'),  // Changed from 'coach' to 'user'
 ];
 
 // Validation rules for login
 const loginValidation = [
   body('email').isEmail().withMessage('Invalid email address'),
   body('password').notEmpty().withMessage('Password is required'),
-  body('userType').isIn(['athlete', 'coach']).withMessage('Invalid user type'),
+  body('userType').isIn(['athlete', 'user']).withMessage('Invalid user type'),  // Changed from 'coach' to 'user'
 ];
 
 // Register user
@@ -54,7 +54,7 @@ router.post('/register', registerValidation, async (req, res, next) => {
     const token = jwt.sign(
       { id: user._id, email: user.email, userType: user.userType },
       process.env.JWT_SECRET,
-      { expiresIn: '1h' }
+      { expiresIn: '24h' }  // Changed from '1h' to '24h'
     );
 
     res.json({
@@ -114,7 +114,7 @@ router.post('/login', loginValidation, async (req, res, next) => {
         profileCompleted: profileCompleted
       },
       process.env.JWT_SECRET,
-      { expiresIn: '1h' }
+      { expiresIn: '24h' }  // Changed from '1h' to '24h'
     );
 
     res.json({
