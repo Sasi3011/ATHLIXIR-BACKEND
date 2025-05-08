@@ -4,54 +4,60 @@ const mongoose = require('mongoose');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const cors = require('cors');
+const path = require('path');
+const http = require('http');
+const socket = require('./socket'); // merged version
+const config = require('config');
+
+// Route imports
 const authRoutes = require('./routes/auth');
 const athleteRoutes = require('./routes/athlete');
-const socket = require('./socket');
+const userRoutes = require('./routes/users');
+const achievementsRoutes = require('./routes/achievements');
 
-const app = express();
-
-// Environment variable validation
+// Environment variable check
 const { MONGO_URI, JWT_SECRET, FRONTEND_URL } = process.env;
-console.log('MONGO_URI:', MONGO_URI);
 if (!MONGO_URI || !JWT_SECRET || !FRONTEND_URL) {
-  console.error('Missing required environment variables');
+  console.error('❌ Missing required environment variables');
   process.exit(1);
 }
 
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB connected"))
-  .catch(err => console.error("MongoDB connection error:", err));
+// Initialize Express app
+const app = express();
 
+// Connect to MongoDB
+mongoose.connect(MONGO_URI)
+  .then(() => console.log('✅ MongoDB connected'))
+  .catch(err => {
+    console.error('❌ MongoDB connection error:', err);
+    process.exit(1);
+  });
 
-// Define allowed origins
+// Allowed Origins
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:4000',
   'http://localhost:5173',
   'http://localhost:5174',
-  'http://localhost:5175', 
+  'http://localhost:5175',
   'http://localhost:5177',
   'http://localhost:8083',
   'http://127.0.0.1:4000',
   'http://127.0.0.1:5173',
   'http://127.0.0.1:5174',
   'http://127.0.0.1:5176',
-  process.env.FRONTEND_URL, // From .env
+  FRONTEND_URL,
 ];
 
-// CORS middleware
+// CORS Configuration
 app.use(cors({
   origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    // Check against whitelist
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      console.log('Origin not allowed by CORS:', origin);
-      callback(null, false);
+    if (!origin) return callback(null, true); // allow curl, Postman, etc.
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
     }
+    console.warn('❌ Origin not allowed by CORS:', origin);
+    return callback(new Error('Not allowed by CORS'));
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true,
@@ -59,60 +65,65 @@ app.use(cors({
   exposedHeaders: ['Content-Range', 'X-Content-Range'],
 }));
 
-// Request logging
-app.use((req, res, next) => {
-  console.log(`${req.method} ${req.url} - Origin: ${req.headers.origin || 'No origin'}`);
-  next();
-});
-
-// Express middleware for parsing JSON
-app.use(express.json({ limit: '50mb' }));
-
-// Security middleware
+// Security Headers
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
   crossOriginOpenerPolicy: { policy: 'same-origin' },
   crossOriginEmbedderPolicy: false
 }));
 
-// Rate limiting
+// Rate Limiting
 app.use(rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,
+  max: 100
 }));
 
-// Routes
-console.log('Mounting routes...');
+// Body Parser
+app.use(express.json({ limit: '50mb' }));
 
-// Mount routes at both paths to ensure compatibility
+// Request Logger
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.url} - Origin: ${req.headers.origin || 'No origin'}`);
+  next();
+});
+
+// API Routes
+app.use('/api/users', userRoutes);
 app.use('/api/auth', authRoutes);
-app.use('/auth', authRoutes);
+app.use('/auth', authRoutes); // legacy path
 app.use('/api/athlete', athleteRoutes);
-app.use('/athlete', athleteRoutes);
+app.use('/athlete', athleteRoutes); // legacy path
+app.use('/api/achievements', achievementsRoutes);
 
-// Add a health check endpoint
+// Health Check
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', message: 'Server is running' });
 });
 
-console.log('Routes mounted: /api/auth, /auth, /api/athlete, /athlete');
+// Serve static assets in production
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static('client/build'));
+  app.get('*', (req, res) =>
+    res.sendFile(path.resolve(__dirname, 'client', 'build', 'index.html'))
+  );
+}
 
-// Error handling middleware
+// Error Handler
 app.use((err, req, res, next) => {
-  console.error('Error:', err.message);
-  console.error(err.stack);
-  
-  // CORS error handling
+  console.error('❌ Server Error:', err.message);
   if (err.message === 'Not allowed by CORS') {
     return res.status(403).json({ error: 'CORS policy violation' });
   }
-  
   res.status(500).json({ error: 'Something went wrong!' });
 });
 
-// Start server
-const PORT = process.env.PORT || 5000;
-const server = app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// Create HTTP Server
+const server = http.createServer(app);
 
-// Socket.IO initialization
-socket.init(server);
+// Init Socket.IO
+const io = socket.init(server);
+app.set('io', io);
+
+// Start Server
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

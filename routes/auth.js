@@ -1,46 +1,111 @@
 const express = require('express');
+const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { body, validationResult } = require('express-validator');
+const { check, body, validationResult } = require('express-validator');
+const config = require('config');
+const auth = require('../middleware/auth');
+
 const User = require('../models/User');
 const Athlete = require('../models/athlete');
-const router = express.Router();
 
-// Validation rules for registration
+// -------------------- VALIDATION --------------------
 const registerValidation = [
   body('email').isEmail().withMessage('Invalid email address'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
-  body('userType').isIn(['athlete', 'user']).withMessage('Invalid user type'),  // Changed from 'coach' to 'user'
+  body('userType').isIn(['athlete', 'user']).withMessage('Invalid user type'),
 ];
 
-// Validation rules for login
 const loginValidation = [
   body('email').isEmail().withMessage('Invalid email address'),
   body('password').notEmpty().withMessage('Password is required'),
-  body('userType').isIn(['athlete', 'user']).withMessage('Invalid user type'),  // Changed from 'coach' to 'user'
+  body('userType').isIn(['athlete', 'user']).withMessage('Invalid user type'),
 ];
 
-// Register user
-router.post('/register', registerValidation, async (req, res, next) => {
+// -------------------- AUTH ROUTES --------------------
+
+// @route   GET /api/auth
+// @desc    Get authenticated user
+// @access  Private
+router.get('/', auth, async (req, res) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+    const user = await User.findById(req.user.id).select('-password');
+    res.json(user);
+  } catch (err) {
+    console.error('Error fetching user:', err.message);
+    res.status(500).send('Server error');
+  }
+});
+
+// @route   POST /api/auth (Login)
+// @desc    Authenticate user & return token
+// @access  Public
+router.post('/', loginValidation, async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+  const { email, password, userType } = req.body;
+
+  try {
+    const user = await User.findOne({ email, userType });
+    if (!user) return res.status(400).json({ msg: 'Invalid credentials' });
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return res.status(400).json({ msg: 'Invalid credentials' });
+
+    // Athlete profile check
+    let profileCompleted = user.profileCompleted;
+    if (userType === 'athlete') {
+      const athleteProfile = await Athlete.findOne({ email });
+      if (!!athleteProfile && !user.profileCompleted) {
+        await User.findByIdAndUpdate(user._id, { profileCompleted: true });
+        profileCompleted = true;
+      }
     }
 
-    const { email, password, userType } = req.body;
+    const payload = {
+      user: {
+        id: user._id,
+        email: user.email,
+        userType: user.userType,
+        profileCompleted,
+      },
+    };
 
-    // Check if user exists
+    jwt.sign(payload, process.env.JWT_SECRET || config.get('jwtSecret'), { expiresIn: '24h' }, (err, token) => {
+      if (err) throw err;
+      res.json({
+        token,
+        user: {
+          id: user._id,
+          email: user.email,
+          userType: user.userType,
+          profileCompleted,
+        },
+      });
+    });
+  } catch (err) {
+    console.error('Login error:', err.message);
+    res.status(500).send('Server error');
+  }
+});
+
+// @route   POST /api/auth/register
+// @desc    Register new user
+// @access  Public
+router.post('/register', registerValidation, async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+  const { email, password, userType } = req.body;
+
+  try {
     let user = await User.findOne({ email, userType });
-    if (user) {
-      return res.status(400).json({ error: 'User already exists' });
-    }
+    if (user) return res.status(400).json({ error: 'User already exists' });
 
-    // Hash password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Create user
     user = new User({
       email,
       password: hashedPassword,
@@ -50,230 +115,116 @@ router.post('/register', registerValidation, async (req, res, next) => {
 
     await user.save();
 
-    // Generate JWT
-    const token = jwt.sign(
-      { id: user._id, email: user.email, userType: user.userType },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }  // Changed from '1h' to '24h'
-    );
-
-    res.json({
-      token,
-      user: { id: user._id, email: user.email, userType: user.userType },
-    });
-  } catch (err) {
-    console.error('Register error:', err.message);
-    next(err);
-  }
-});
-
-// Login user
-router.post('/login', loginValidation, async (req, res, next) => {
-  try {
-    console.log('Received login request:', req.body.email);
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-
-    const { email, password, userType } = req.body;
-
-    // Check if user exists
-    const user = await User.findOne({ email, userType });
-    if (!user) {
-      return res.status(400).json({ error: 'Invalid credentials' });
-    }
-
-    // Check password
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(400).json({ error: 'Invalid credentials' });
-    }
-
-    // Double-check athlete profile status for athletes
-    let profileCompleted = user.profileCompleted;
-    
-    if (userType === 'athlete') {
-      // Explicitly check if athlete profile exists
-      const athleteProfile = await Athlete.findOne({ email });
-      
-      // Update profile completion status if needed
-      if (!!athleteProfile && !user.profileCompleted) {
-        console.log('Fixing profile completion status for user:', user._id);
-        await User.findByIdAndUpdate(user._id, { profileCompleted: true });
-        profileCompleted = true;
-      }
-    }
-
-    // Generate JWT with updated profile status
-    const token = jwt.sign(
-      { 
-        id: user._id, 
-        email: user.email, 
-        userType: user.userType,
-        profileCompleted: profileCompleted
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }  // Changed from '1h' to '24h'
-    );
-
-    res.json({
-      token,
+    const payload = {
       user: {
         id: user._id,
         email: user.email,
         userType: user.userType,
-        profileCompleted: profileCompleted, // Use the verified value
+        profileCompleted: user.profileCompleted,
       },
-    });
+    };
+
+    const token = jwt.sign(payload, process.env.JWT_SECRET || config.get('jwtSecret'), { expiresIn: '24h' });
+
+    res.json({ token, user: payload.user });
   } catch (err) {
-    console.error('Login error:', err.message);
-    next(err);
+    console.error('Register error:', err.message);
+    res.status(500).send('Server error');
   }
 });
 
-// Check profile completion status
-router.get('/profile-completion/:email', async (req, res, next) => {
+// -------------------- PROFILE STATUS ROUTES --------------------
+
+// @route GET /api/auth/profile-completion/:email
+router.get('/profile-completion/:email', async (req, res) => {
   try {
     const { email } = req.params;
-    console.log('Checking profile completion for:', email);
-    
-    // Find the user
     const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    
-    // If user is not an athlete, profile is considered complete
-    if (user.userType !== 'athlete') {
-      return res.json(true);
-    }
-    
-    // For athletes, check if profile exists in the Athlete collection
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    if (user.userType !== 'athlete') return res.json(true);
+
     const athleteProfile = await Athlete.findOne({ email });
-    
-    // Return true if profile exists, false otherwise
     return res.json(!!athleteProfile);
   } catch (err) {
-    console.error('Profile completion check error:', err.message);
-    next(err);
+    console.error('Profile check error:', err.message);
+    res.status(500).send('Server error');
   }
 });
 
-// Debug profile completion (for troubleshooting)
-router.get('/debug-profile/:email', async (req, res, next) => {
+// @route GET /api/auth/debug-profile/:email
+router.get('/debug-profile/:email', async (req, res) => {
   try {
     const { email } = req.params;
-    console.log('DEBUG: Checking profile status for:', email);
-    
-    // Find the user
     const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(404).json({ 
-        error: 'User not found', 
-        email: email 
-      });
-    }
+    if (!user) return res.status(404).json({ error: 'User not found', email });
 
-    // Check if athlete profile exists
     const athleteProfile = await Athlete.findOne({ email });
-    
-    // Return full status information for debugging
     res.json({
       userDetails: {
         id: user._id,
         email: user.email,
         userType: user.userType,
-        profileCompletedFlag: user.profileCompleted
+        profileCompletedFlag: user.profileCompleted,
       },
       profileExists: !!athleteProfile,
       athleteProfileId: athleteProfile ? athleteProfile._id : null,
       athleteUserId: athleteProfile ? athleteProfile.userId : null,
-      userIdMatch: athleteProfile ? 
-        user._id.toString() === athleteProfile.userId.toString() : false
+      userIdMatch: athleteProfile
+        ? user._id.toString() === athleteProfile.userId.toString()
+        : false,
     });
   } catch (err) {
-    console.error('Debug profile check error:', err.message);
-    next(err);
+    console.error('Debug profile error:', err.message);
+    res.status(500).send('Server error');
   }
 });
 
-// Request password reset
-router.post('/password-reset', [
-  body('email').isEmail().withMessage('Invalid email address'),
-], async (req, res, next) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
+// -------------------- PASSWORD RESET ROUTES --------------------
 
-    const { email } = req.body;
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+// @route POST /api/auth/password-reset
+router.post('/password-reset', [body('email').isEmail().withMessage('Invalid email')], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-    // In a real app, generate and send reset token via email
-    // For simplicity, return a mock response
-    res.json({ message: 'Password reset email sent' });
-  } catch (err) {
-    console.error('Password reset request error:', err.message);
-    next(err);
-  }
+  const { email } = req.body;
+  const user = await User.findOne({ email });
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  res.json({ message: 'Password reset email sent (mock)' });
 });
 
-// Verify reset token
+// @route POST /api/auth/verify-reset-token
 router.post('/verify-reset-token', [
-  body('email').isEmail().withMessage('Invalid email address'),
+  body('email').isEmail().withMessage('Invalid email'),
   body('token').notEmpty().withMessage('Token is required'),
-], async (req, res, next) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-    // In a real app, verify the reset token
-    // For simplicity, return a mock response
-    res.json({ valid: true });
-  } catch (err) {
-    console.error('Token verification error:', err.message);
-    next(err);
-  }
+  res.json({ valid: true }); // Mock response
 });
 
-// Reset password
+// @route POST /api/auth/reset-password
 router.post('/reset-password', [
-  body('email').isEmail().withMessage('Invalid email address'),
+  body('email').isEmail().withMessage('Invalid email'),
   body('token').notEmpty().withMessage('Token is required'),
   body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters'),
-], async (req, res, next) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-    const { email, newPassword } = req.body;
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+  const { email, newPassword } = req.body;
+  const user = await User.findOne({ email });
+  if (!user) return res.status(404).json({ error: 'User not found' });
 
-    // Hash new password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(newPassword, salt);
+  const salt = await bcrypt.genSalt(10);
+  const hashedPassword = await bcrypt.hash(newPassword, salt);
 
-    // Update password
-    user.password = hashedPassword;
-    await user.save();
+  user.password = hashedPassword;
+  await user.save();
 
-    res.json({ message: 'Password reset successful' });
-  } catch (err) {
-    console.error('Password reset error:', err.message);
-    next(err);
-  }
+  res.json({ message: 'Password reset successful' });
 });
 
 module.exports = router;
