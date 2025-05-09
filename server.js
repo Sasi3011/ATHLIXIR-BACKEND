@@ -43,9 +43,6 @@ const allowedOrigins = [
   'http://127.0.0.1:5173',
   'http://127.0.0.1:5174',
   'http://127.0.0.1:5176',
-  'https://athlixir.technovanam.com',
-  'https://athlixir-backend.onrender.com',
-  'https://athlixir-technovanam.netlify.app/',
   process.env.FRONTEND_URL,
 ];
 
@@ -135,7 +132,12 @@ app.use((req, res, next) => {
     if (res.statusCode >= 400) {
       console.log(`❌ Error response (${res.statusCode}): ${data}`);
     }
-    return oldSend.apply(res, arguments);
+    if (typeof oldSend === 'function') {
+      return oldSend.apply(res, arguments);
+    } else {
+      console.error('oldSend is not a function. Cannot send response properly.');
+      return;
+    }
   };
   next();
 });
