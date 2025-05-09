@@ -1,35 +1,9 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Athlete = require('../models/athlete');
 const router = express.Router();
-
-// Middleware to verify JWT - Improved with better error handling
-const authMiddleware = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  
-  if (!authHeader) {
-    return res.status(401).json({ error: 'Authorization header missing' });
-  }
-  
-  const token = authHeader.split(' ')[1];
-  if (!token) {
-    return res.status(401).json({ error: 'Token not provided' });
-  }
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
-    next();
-  } catch (err) {
-    console.error('JWT verification error:', err.message);
-    if (err.name === 'TokenExpiredError') {
-      return res.status(401).json({ error: 'Token expired' });
-    }
-    res.status(401).json({ error: 'Invalid token' });
-  }
-};
+const auth = require('../middleware/unifiedAuth'); // Use unified auth middleware
 
 // Validation rules for athlete profile
 const profileValidation = [
@@ -54,163 +28,19 @@ const profileValidation = [
 // Save athlete profile
 router.post(
   '/profile',
-  authMiddleware,
+  auth,
   profileValidation,
-  async (req, res, next) => {
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
-      }
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
 
-      const profileData = req.body;
-      if (req.user.email !== profileData.email) {
-        return res.status(403).json({ error: 'Unauthorized email' });
-      }
-
-      console.log('Creating/updating athlete profile for user:', req.user.id);
+    const {
+      fullName,
+      email,
+      address,
+      district,
+      state,
+      phone,
       
-      // Make sure userId is correctly set from the authenticated user
-      const athlete = await Athlete.findOneAndUpdate(
-        { email: profileData.email },
-        { ...profileData, userId: req.user.id, updatedAt: new Date() },
-        { upsert: true, new: true }
-      );
-
-      console.log('Athlete profile saved:', athlete._id);
-      
-      // Update user profile completion status
-      const updatedUser = await User.findByIdAndUpdate(
-        req.user.id, 
-        { profileCompleted: true },
-        { new: true }  // Return the updated document
-      );
-      
-      console.log('User profile completion updated:', updatedUser.profileCompleted);
-
-      res.json({ 
-        success: true, 
-        athlete,
-        profileCompleted: true,
-        userId: req.user.id
-      });
-    } catch (err) {
-      console.error('Save profile error:', err.message);
-      next(err);
-    }
-  }
-);
-
-// Get athlete profile
-router.get(
-  '/profile/:email',
-  authMiddleware,
-  async (req, res, next) => {
-    try {
-      const { email } = req.params;
-      if (req.user.email !== email) {
-        return res.status(403).json({ error: 'Unauthorized access' });
-      }
-
-      const athlete = await Athlete.findOne({ email });
-      if (!athlete) {
-        return res.status(404).json({ error: 'Profile not found' });
-      }
-
-      res.json(athlete);
-    } catch (err) {
-      console.error('Get profile error:', err.message);
-      next(err);
-    }
-  }
-);
-
-// Update athlete profile
-router.put(
-  '/profile',
-  authMiddleware,
-  profileValidation,
-  async (req, res, next) => {
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
-      }
-
-      const profileData = req.body;
-      if (req.user.email !== profileData.email) {
-        return res.status(403).json({ error: 'Unauthorized email' });
-      }
-
-      const athlete = await Athlete.findOneAndUpdate(
-        { email: profileData.email },
-        { ...profileData, updatedAt: new Date() },
-        { new: true }
-      );
-
-      if (!athlete) {
-        return res.status(404).json({ error: 'Profile not found' });
-      }
-
-      res.json({ success: true, athlete });
-    } catch (err) {
-      console.error('Update profile error:', err.message);
-      next(err);
-    }
-  }
-);
-
-// Update profile photo
-router.put(
-  '/profile/photo',
-  authMiddleware,
-  [
-    body('email').isEmail().withMessage('Invalid email address'),
-    body('profilePhoto').notEmpty().withMessage('Profile photo is required'),
-  ],
-  async (req, res, next) => {
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
-      }
-
-      const { email, profilePhoto } = req.body;
-      if (req.user.email !== email) {
-        return res.status(403).json({ error: 'Unauthorized email' });
-      }
-
-      const athlete = await Athlete.findOneAndUpdate(
-        { email },
-        { profilePhoto, updatedAt: new Date() },
-        { new: true }
-      );
-
-      if (!athlete) {
-        return res.status(404).json({ error: 'Profile not found' });
-      }
-
-      res.json({ success: true, athlete });
-    } catch (err) {
-      console.error('Update profile photo error:', err.message);
-      next(err);
-    }
-  }
-);
-
-// Get all athlete profiles
-router.get(
-  '/profiles',
-  authMiddleware,
-  async (req, res, next) => {
-    try {
-      const athletes = await Athlete.find();
-      res.json(athletes);
-    } catch (err) {
-      console.error('Get all profiles error:', err.message);
-      next(err);
-    }
-  }
-);
-
-module.exports = router;

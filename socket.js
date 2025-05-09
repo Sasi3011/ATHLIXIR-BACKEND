@@ -1,6 +1,6 @@
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
-const config = require('config');
+const jwtSecret = process.env.JWT_SECRET || require('config').get('jwtSecret');
 
 let io;
 
@@ -12,12 +12,14 @@ const allowedOrigins = [
   'http://localhost:5175',
   'http://localhost:5177',
   'http://localhost:8083',
+  'http://127.0.0.1:3000',
   'http://127.0.0.1:4000',
   'http://127.0.0.1:5173',
   'http://127.0.0.1:5174',
   'http://127.0.0.1:5176',
   'https://athlixir.technovanam.com',
   'https://athlixir-backend.onrender.com',
+  'https://athlixir-technovanam.vercel.app',
   process.env.FRONTEND_URL,
 ];
 
@@ -36,7 +38,7 @@ module.exports = {
         },
         methods: ['GET', 'POST'],
         credentials: true,
-        allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Origin', 'Accept']
+        allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token', 'X-Requested-With', 'Origin', 'Accept']
       },
     });
 
@@ -46,10 +48,11 @@ module.exports = {
       if (!token) return next(new Error('Authentication error: No token provided'));
 
       try {
-        const decoded = jwt.verify(token, config.get('jwtSecret'));
+        const decoded = jwt.verify(token, jwtSecret);
         socket.user = decoded.user;
         next();
       } catch (err) {
+        console.error('Socket auth error:', err.message);
         return next(new Error('Authentication error: Invalid token'));
       }
     });

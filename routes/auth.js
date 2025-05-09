@@ -4,7 +4,8 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { check, body, validationResult } = require('express-validator');
 const config = require('config');
-const auth = require('../middleware/auth');
+const auth = require('../middleware/unifiedAuth'); // Use unified auth middleware
+const jwtSecret = process.env.JWT_SECRET || config.get('jwtSecret');
 
 const User = require('../models/User');
 const Athlete = require('../models/athlete');
@@ -30,6 +31,9 @@ const loginValidation = [
 router.get('/', auth, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('-password');
+    if (!user) {
+      return res.status(404).json({ msg: 'User not found' });
+    }
     res.json(user);
   } catch (err) {
     console.error('Error fetching user:', err.message);
@@ -65,19 +69,19 @@ router.post('/', loginValidation, async (req, res) => {
 
     const payload = {
       user: {
-        id: user._id,
+        id: user._id.toString(), // Ensure ID is a string
         email: user.email,
         userType: user.userType,
         profileCompleted,
       },
     };
 
-    jwt.sign(payload, process.env.JWT_SECRET || config.get('jwtSecret'), { expiresIn: '24h' }, (err, token) => {
+    jwt.sign(payload, jwtSecret, { expiresIn: '24h' }, (err, token) => {
       if (err) throw err;
       res.json({
         token,
         user: {
-          id: user._id,
+          id: user._id.toString(),
           email: user.email,
           userType: user.userType,
           profileCompleted,
@@ -117,14 +121,14 @@ router.post('/register', registerValidation, async (req, res) => {
 
     const payload = {
       user: {
-        id: user._id,
+        id: user._id.toString(),
         email: user.email,
         userType: user.userType,
         profileCompleted: user.profileCompleted,
       },
     };
 
-    const token = jwt.sign(payload, process.env.JWT_SECRET || config.get('jwtSecret'), { expiresIn: '24h' });
+    const token = jwt.sign(payload, jwtSecret, { expiresIn: '24h' });
 
     res.json({ token, user: payload.user });
   } catch (err) {
@@ -162,14 +166,14 @@ router.get('/debug-profile/:email', async (req, res) => {
     const athleteProfile = await Athlete.findOne({ email });
     res.json({
       userDetails: {
-        id: user._id,
+        id: user._id.toString(),
         email: user.email,
         userType: user.userType,
         profileCompletedFlag: user.profileCompleted,
       },
       profileExists: !!athleteProfile,
-      athleteProfileId: athleteProfile ? athleteProfile._id : null,
-      athleteUserId: athleteProfile ? athleteProfile.userId : null,
+      athleteProfileId: athleteProfile ? athleteProfile._id.toString() : null,
+      athleteUserId: athleteProfile ? athleteProfile.userId.toString() : null,
       userIdMatch: athleteProfile
         ? user._id.toString() === athleteProfile.userId.toString()
         : false,

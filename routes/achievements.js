@@ -169,7 +169,7 @@ router.delete('/:id', auth, async (req, res) => {
       return res.status(401).json({ msg: 'Not authorized to delete this achievement' });
     }
 
-    await achievement.remove();
+    await Achievement.findByIdAndDelete(req.params.id);
     
     // Emit socket event for real-time updates
     req.app.get('io').to(req.user.email).emit('achievement-deleted', req.params.id);

@@ -7,31 +7,31 @@ const cors = require('cors');
 const path = require('path');
 const http = require('http');
 const socket = require('./socket'); // merged version
-const config = require('config');
+
+// Load the database connection function
+const connectDB = require('./config/db');
 
 // Route imports
 const authRoutes = require('./routes/auth');
 const athleteRoutes = require('./routes/athlete');
 const userRoutes = require('./routes/users');
 const achievementsRoutes = require('./routes/achievements');
+const athletesRoutes = require('./routes/athletes');
 
 // Environment variable check
-const { MONGO_URI, JWT_SECRET, FRONTEND_URL } = process.env;
-if (!MONGO_URI || !JWT_SECRET || !FRONTEND_URL) {
-  console.error('❌ Missing required environment variables');
+const requiredEnvVars = ['MONGO_URI', 'JWT_SECRET', 'FRONTEND_URL'];
+const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingEnvVars.length > 0) {
+  console.error(`❌ Missing required environment variables: ${missingEnvVars.join(', ')}`);
   process.exit(1);
 }
 
 // Initialize Express app
 const app = express();
 
-// Connect to MongoDB
-mongoose.connect(MONGO_URI)
-  .then(() => console.log('✅ MongoDB connected'))
-  .catch(err => {
-    console.error('❌ MongoDB connection error:', err);
-    process.exit(1);
-  });
+// Connect to MongoDB using the connectDB function
+connectDB();
 
 // Allowed Origins
 const allowedOrigins = [
@@ -42,11 +42,15 @@ const allowedOrigins = [
   'http://localhost:5175',
   'http://localhost:5177',
   'http://localhost:8083',
+  'http://127.0.0.1:3000',
   'http://127.0.0.1:4000',
   'http://127.0.0.1:5173',
   'http://127.0.0.1:5174',
   'http://127.0.0.1:5176',
-  FRONTEND_URL,
+  'https://athlixir.technovanam.com',
+  'https://athlixir-backend.onrender.com',
+  'https://athlixir-technovanam.vercel.app',
+  process.env.FRONTEND_URL,
 ];
 
 // CORS Configuration
@@ -61,7 +65,7 @@ app.use(cors({
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Origin', 'Accept'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token', 'X-Requested-With', 'Origin', 'Accept'],
   exposedHeaders: ['Content-Range', 'X-Content-Range'],
 }));
 
@@ -90,10 +94,9 @@ app.use((req, res, next) => {
 // API Routes
 app.use('/api/users', userRoutes);
 app.use('/api/auth', authRoutes);
-app.use('/auth', authRoutes); // legacy path
 app.use('/api/athlete', athleteRoutes);
-app.use('/athlete', athleteRoutes); // legacy path
 app.use('/api/achievements', achievementsRoutes);
+app.use('/api/athletes', athletesRoutes);
 
 // Health Check
 app.get('/health', (req, res) => {

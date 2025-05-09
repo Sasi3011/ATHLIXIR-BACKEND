@@ -1,5 +1,0 @@
-{
-    "mongoURI": "mongodb://localhost:27017/athleteAchievements",
-    "jwtSecret": "athleteApp_jwtSecret_token",
-    "clientURL": "http://localhost:3000"
-  }

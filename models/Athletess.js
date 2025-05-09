@@ -41,19 +41,11 @@ const athleteSchema = new mongoose.Schema({
     twitter: String,
     facebook: String,
     website: String
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now
   }
 }, { 
   timestamps: true 
 });
 
-const Athlete = mongoose.model('Athlete', athleteSchema);
+const Athlete = mongoose.models.Athlete || mongoose.model('Athlete', athleteSchema);
 
 module.exports = Athlete;
