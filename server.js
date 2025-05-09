@@ -17,6 +17,7 @@ const userRoutes = require('./routes/users');
 const achievementsRoutes = require('./routes/achievements');
 const athletesRoutes = require('./routes/athletes');
 
+
 // Environment variable check
 const requiredEnvVars = ['MONGO_URI', 'JWT_SECRET', 'FRONTEND_URL'];
 const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
@@ -111,6 +112,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/athlete', athleteRoutes);
 app.use('/api/achievements', achievementsRoutes);
 app.use('/api/athletes', athletesRoutes);
+app.use('/api/achievements', require('./routes/achievements')); // ✅ this must be present
+
 
 // Health check
 app.get('/health', (req, res) => {

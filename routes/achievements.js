@@ -53,11 +53,11 @@ router.get('/:id', auth, async (req, res) => {
 // @access  Private
 router.post('/', [
   auth,
-  [
+
     check('title', 'Title is required').not().isEmpty(),
     check('event', 'Event is required').not().isEmpty(),
     check('date', 'Date is required').not().isEmpty()
-  ]
+
 ], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {

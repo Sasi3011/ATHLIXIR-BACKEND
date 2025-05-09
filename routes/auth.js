@@ -44,7 +44,7 @@ router.get('/', auth, async (req, res) => {
 // @route   POST /api/auth (Login)
 // @desc    Authenticate user & return token
 // @access  Public
-router.post('/', loginValidation, async (req, res) => {
+router.post('/login', loginValidation, async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
