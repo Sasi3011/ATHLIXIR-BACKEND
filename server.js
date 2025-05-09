@@ -9,7 +9,7 @@ const http = require('http');
 const socket = require('./socket');
 const connectDB = require('./config/db');
 const auth = require('./middleware/auth');
-
+const messageRoutes = require('./routes/messages');
 // Route imports
 const authRoutes = require('./routes/auth');
 const athleteRoutes = require('./routes/athlete');
@@ -110,7 +110,7 @@ app.use('/api/athlete', athleteRoutes);
 app.use('/api/achievements', achievementsRoutes);
 app.use('/api/athletes', athletesRoutes);
 app.use('/api/achievements', require('./routes/achievements')); // ✅ this must be present
-
+app.use('/api/messages', messageRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
