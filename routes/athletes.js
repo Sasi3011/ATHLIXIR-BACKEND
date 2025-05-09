@@ -1,9 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const Athlete = require('../models/Athletess');
+const Athlete = require('../models/athlete');
 const Achievement = require('../models/Achievement');
 const auth = require('../middleware/auth');
 const { check, validationResult } = require('express-validator');
+const NodeCache = require('node-cache');
+const statsCache = new NodeCache({ stdTTL: 300 });
 
 // @route   GET /api/athletes/profile
 // @desc    Get current athlete profile
@@ -108,7 +110,15 @@ router.post('/profile', [
 // @desc    Get athlete statistics
 // @access  Private
 router.get('/stats', auth, async (req, res) => {
+  const cacheKey = `stats-${req.user.email}`;
+  const cachedStats = statsCache.get(cacheKey);
+  
+  if (cachedStats) {
+    return res.json(cachedStats);
+  }
+  
   try {
+    // Existing stats calculation code
     const achievements = await Achievement.find({ athleteEmail: req.user.email });
     
     const stats = {
@@ -119,12 +129,12 @@ router.get('/stats', auth, async (req, res) => {
       careerHighlights: achievements.filter(a => a.isCareerHighlight).length,
       personalBests: achievements.filter(a => a.isPersonalBest).length
     };
-
+    
+    statsCache.set(cacheKey, stats);
     res.json(stats);
   } catch (err) {
     console.error('Error in fetching athlete stats:', err.message);
     res.status(500).send('Server error');
   }
 });
-
 module.exports = router;

@@ -1,0 +1,4 @@
+{
+  "mongoURI": "mongodb+srv://sasikiran86105:sasi@cluster0.kktnq2v.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0",
+  "jwtSecret": "49210560319a44cb391c87708302791277d31627867780301f1eb747fe501bef"
+}

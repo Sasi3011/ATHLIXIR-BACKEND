@@ -110,7 +110,17 @@ if (process.env.NODE_ENV === 'production') {
     res.sendFile(path.resolve(__dirname, 'client', 'build', 'index.html'))
   );
 }
-
+// Additional error logging
+app.use((req, res, next) => {
+  const oldSend = res.send;
+  res.send = function(data) {
+    if (res.statusCode >= 400) {
+      console.log(`❌ Error response (${res.statusCode}): ${data}`);
+    }
+    return oldSend.apply(res, arguments);
+  };
+  next();
+});
 // Error Handler
 app.use((err, req, res, next) => {
   console.error('❌ Server Error:', err.message);
@@ -130,3 +140,25 @@ app.set('io', io);
 // Start Server
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+
+const corsOptions = {
+  origin: function(origin, callback) {
+    // For development: allow requests with no origin 
+    // (like curl or Postman)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    console.warn(`❌ Origin rejected by CORS: ${origin}`);
+    return callback(new Error('Not allowed by CORS'));
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token', 'X-Requested-With', 'Origin', 'Accept'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  maxAge: 86400  // Cache preflight requests for 24 hours
+};
+
+app.use(cors(corsOptions));

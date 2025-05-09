@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { check, body, validationResult } = require('express-validator');
 const config = require('config');
-const auth = require('../middleware/unifiedAuth'); // Use unified auth middleware
+const auth = require('../middleware/auth'); // Use unified auth middleware
 const jwtSecret = process.env.JWT_SECRET || config.get('jwtSecret');
 
 const User = require('../models/User');

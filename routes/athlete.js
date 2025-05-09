@@ -3,7 +3,7 @@ const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const Athlete = require('../models/athlete');
 const router = express.Router();
-const auth = require('../middleware/unifiedAuth'); // Use unified auth middleware
+const auth = require('../middleware/auth'); // Updated to use consistent auth middleware
 
 // Validation rules for athlete profile
 const profileValidation = [
@@ -43,4 +43,112 @@ router.post(
       district,
       state,
       phone,
-      
+      nationality,
+      dateOfBirth,
+      gender,
+      sportsCategory,
+      biography,
+      yearsOfExperience,
+      athleteType,
+      languagesSpoken,
+      medalsAndAwards,
+      competingSince,
+      goals,
+      profilePhoto,
+      skillLevel
+    } = req.body;
+
+    try {
+      // Check if athlete profile already exists
+      let athlete = await Athlete.findOne({ email });
+
+      if (athlete) {
+        // Update existing profile
+        athlete = await Athlete.findOneAndUpdate(
+          { email },
+          {
+            fullName,
+            address,
+            district,
+            state,
+            phone,
+            nationality,
+            dateOfBirth,
+            gender,
+            sportsCategory,
+            biography,
+            yearsOfExperience,
+            athleteType,
+            languagesSpoken,
+            medalsAndAwards,
+            competingSince,
+            goals,
+            profilePhoto,
+            skillLevel,
+            updatedAt: Date.now()
+          },
+          { new: true }
+        );
+
+        return res.json(athlete);
+      }
+
+      // Create new athlete profile
+      const user = await User.findOne({ email });
+      if (!user) {
+        return res.status(404).json({ msg: 'User not found' });
+      }
+
+      athlete = new Athlete({
+        userId: user._id,
+        email,
+        fullName,
+        address,
+        district,
+        state,
+        phone,
+        nationality,
+        dateOfBirth,
+        gender,
+        sportsCategory,
+        biography,
+        yearsOfExperience,
+        athleteType,
+        languagesSpoken,
+        medalsAndAwards,
+        competingSince,
+        goals,
+        profilePhoto,
+        skillLevel
+      });
+
+      await athlete.save();
+
+      // Update user's profileCompleted status
+      await User.findByIdAndUpdate(user._id, { profileCompleted: true });
+
+      res.json(athlete);
+    } catch (err) {
+      console.error('Error saving athlete profile:', err.message);
+      res.status(500).send('Server error');
+    }
+  }
+);
+
+// Get athlete profile
+router.get('/profile', auth, async (req, res) => {
+  try {
+    const athlete = await Athlete.findOne({ email: req.user.email });
+    
+    if (!athlete) {
+      return res.status(404).json({ msg: 'Athlete profile not found' });
+    }
+
+    res.json(athlete);
+  } catch (err) {
+    console.error('Error fetching athlete profile:', err.message);
+    res.status(500).send('Server error');
+  }
+});
+
+module.exports = router;

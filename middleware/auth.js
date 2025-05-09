@@ -1,4 +1,3 @@
-// middleware/unifiedAuth.js
 const jwt = require('jsonwebtoken');
 const jwtSecret = process.env.JWT_SECRET || require('config').get('jwtSecret');
 
