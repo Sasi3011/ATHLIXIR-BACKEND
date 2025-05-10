@@ -16,6 +16,7 @@ const athleteRoutes = require('./routes/athlete');
 const userRoutes = require('./routes/users');
 const achievementsRoutes = require('./routes/achievements');
 const athletesRoutes = require('./routes/athletes');
+const newsRoutes = require('./routes/news');
 
 
 // Environment variable check
@@ -111,6 +112,7 @@ app.use('/api/achievements', achievementsRoutes);
 app.use('/api/athletes', athletesRoutes);
 app.use('/api/achievements', require('./routes/achievements')); // ✅ this must be present
 app.use('/api/messages', messageRoutes);
+app.use('/api/news', newsRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
